@@ -30,9 +30,9 @@ Controlo remoto bidirecional do Claude Code via Telegram — aprova permissões 
 
 **Duas funções principais:**
 
-1. **Aprovação remota de permissões** — Quando o Claude Code pede permissão para executar uma ferramenta (Bash, Edit, Write, etc.), recebes uma notificação no Telegram com botões [✅ Aprovar] e [❌ Rejeitar].
+1. **Aprovação remota de permissões** — Quando o Claude Code pede permissão para executar uma ferramenta (Bash, Edit, Write, etc.), recebes uma notificação no Telegram com botões [✅ Aprovar] e [❌ Rejeitar]. Podes também aprovar/rejeitar respondendo com texto simples (`s`/`n`).
 
-2. **Envio remoto de tarefas** — Envia mensagens de texto no Telegram que são executadas como prompts no Claude Code CLI.
+2. **Envio remoto de tarefas** — Envia mensagens de texto no Telegram que são executadas como prompts no Claude Code CLI, mantendo contexto de conversação entre mensagens.
 
 ---
 
@@ -65,9 +65,11 @@ cp .env.example .env
 # Edita o .env com o teu token e chat ID
 ```
 
-### 4. Adicionar hook ao Claude Code
+### 4. Configurar o hook no Claude Code
 
-Adiciona ao ficheiro `~/.claude/settings.json`:
+O hook intercepta os pedidos de permissão do Claude Code e envia-os para o Telegram em vez de mostrar prompts interativos no terminal.
+
+Adiciona ao ficheiro `~/.claude/settings.json` **no nível raiz** (não dentro de `"permissions"`):
 
 ```json
 {
@@ -78,22 +80,29 @@ Adiciona ao ficheiro `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "node C:/Users/joaom/OneDrive/PROJECTS/ClaudeRemote/hooks/permission-hook.js"
+            "command": "node /caminho/absoluto/para/ClaudeRemote/hooks/permission-hook.js"
           }
         ]
       }
     ]
+  },
+  "permissions": {
+    ...
   }
 }
 ```
 
-> **Windows:** usa sempre `node` + caminho absoluto para o `permission-hook.js`. O `permission-hook.sh` requer Git Bash/WSL.
+> **Importante:** O hook tem de estar no nível raiz do JSON, não dentro de `"permissions"`. Usa sempre o caminho absoluto.
+>
+> **Windows:** usa `node` + caminho absoluto com barras `/`. O `permission-hook.js` é puro Node.js e funciona em Windows, Linux e Mac sem dependências externas.
 
 ### 5. Iniciar
 
 ```bash
 npm start
 ```
+
+Ao arrancar, recebes no Telegram uma confirmação de que o servidor está online.
 
 ---
 
@@ -113,6 +122,7 @@ O script interativo guia-te por todo o processo.
 |---------|-----------|
 | `/start` | Boas-vindas e lista de comandos |
 | `/status` | Estado atual (pedidos pendentes, tarefa ativa, projeto) |
+| `/new` | Iniciar nova sessão (limpa contexto da conversa) |
 | `/denyall` | Rejeitar todos os pedidos de permissão pendentes |
 | `/project` | Ver diretório do projeto atual |
 | `/project <caminho>` | Mudar o diretório do projeto |
@@ -120,7 +130,36 @@ O script interativo guia-te por todo o processo.
 | `/cancel` | Cancelar a tarefa ativa |
 | `/help` | Ajuda detalhada |
 
-**Enviar tarefas:** qualquer mensagem de texto (não-comando) é executada como prompt no Claude Code.
+**Enviar tarefas:** qualquer mensagem de texto (não-comando) é executada como prompt no Claude Code, mantendo o contexto da sessão anterior.
+
+---
+
+## Aprovação de Permissões
+
+Quando o Claude Code pede permissão para editar um ficheiro, executar um comando, etc., recebes no Telegram:
+
+```
+🔔 Pedido de Permissao
+🛠 Ferramenta: Edit
+📁 /caminho/do/projeto
+🕐 21:36
+📄 src/server.js
+
+[✅ Aprovar]  [❌ Rejeitar]
+```
+
+Podes responder de três formas:
+- **Botões inline** — clica ✅ ou ❌ diretamente na mensagem
+- **Texto `s`** (ou `sim`, `y`, `yes`, `1`) — aprova todos os pedidos pendentes
+- **Texto `n`** (ou `não`, `nao`, `no`, `0`) — rejeita todos os pedidos pendentes
+
+---
+
+## Contexto de Conversação
+
+As tarefas enviadas via Telegram mantêm contexto entre mensagens — o Claude lembra-se das instruções anteriores na mesma sessão.
+
+Para começar uma conversa nova (sem memória das anteriores), usa `/new`.
 
 ---
 
@@ -136,7 +175,6 @@ O script interativo guia-te por todo o processo.
 | `CLAUDE_CMD` | Não | `claude` | Comando do Claude Code CLI |
 | `MAX_CONCURRENT_TASKS` | Não | 1 | Máximo de tarefas simultâneas |
 | `TASK_TIMEOUT` | Não | 600 | Timeout em segundos para tarefas CLI |
-| `LOG_LEVEL` | Não | `info` | Nível de log: debug, info, warn, error |
 
 ---
 
@@ -145,34 +183,73 @@ O script interativo guia-te por todo o processo.
 ### Aprovar um comando Bash
 
 ```
-[Telegram] 🔔 Pedido de Permissão
-           🛠 Ferramenta: Bash
-           📁 /home/joao/meu-projeto
-           🕐 14:32
-           ```
-           npm install express
-           ```
-           [✅ Aprovar] [❌ Rejeitar]
+🔔 Pedido de Permissao
+🛠 Ferramenta: Bash
+📁 /home/joao/meu-projeto
+🕐 14:32
+$ npm install express
+
+[✅ Aprovar] [❌ Rejeitar]
 ```
 
 ### Enviar tarefa de desenvolvimento
 
 ```
-[Telegram] Utilizador: "Adiciona validação de email ao formulário de registo"
-[Telegram] ⏳ A processar...
-[Telegram] ✅ Resultado:
-           Adicionei validação de email ao formulário de registo.
-           - src/components/RegisterForm.jsx: Adicionada função validateEmail()
-           - src/utils/validators.js: Novo ficheiro com regex de validação
-           ⏱ 45s
+Tu:     "Adiciona validação de email ao formulário de registo"
+Bot:    ⏳ A processar...
+        📁 /home/joao/meu-projeto
+Bot:    ✅ Resultado
+        Adicionei validação de email...
+        ⏱ 45s
+```
+
+### Conversa com contexto
+
+```
+Tu:     "Cria a função validateEmail em src/utils/validators.js"
+Bot:    ✅ Resultado — função criada
+Tu:     "Agora adiciona testes para essa função"   ← Claude lembra-se do contexto
+Bot:    ✅ Resultado — testes adicionados
+Tu:     /new                                        ← nova sessão
 ```
 
 ### Mudar de projeto
 
 ```
-/project /home/joao/outro-projeto
-✅ Projeto alterado para: /home/joao/outro-projeto
+/project C:/Users/joao/outro-projeto
+✅ Projeto alterado para: C:/Users/joao/outro-projeto
 ```
+
+---
+
+## Logging no Terminal
+
+O servidor mostra em tempo real o que está a acontecer:
+
+```
+[21:30:01] 📨 Telegram → tarefa recebida: "Adiciona validação de email..."
+[21:30:01] 📁 Projeto: C:/Users/joao/meu-projeto
+[21:30:05] 🔔 Pedido de permissao: Edit | cwd: ... | ID: abc-123
+[21:30:08] ✅ Permissão aprovada via botão | ID: abc-123
+[21:30:45] ✅ Claude concluiu em 44000ms
+[21:30:45] 📤 Resultado enviado ao Telegram
+```
+
+---
+
+## Testes
+
+```bash
+npm test
+```
+
+64 testes (unit + integração) usando o runner nativo do Node.js (`node:test`), sem dependências externas.
+
+---
+
+## CI
+
+GitHub Actions corre os testes automaticamente em Node.js 18, 20 e 22 em cada push e pull request para `main`.
 
 ---
 
@@ -217,10 +294,18 @@ sudo systemctl start claude-remote
 - Confirma que o `TELEGRAM_CHAT_ID` corresponde ao teu chat pessoal com o bot
 - Usa `node scripts/get-chat-id.js` para obter o Chat ID correto
 
-**O hook não funciona**
-- Verifica que o caminho no `~/.claude/settings.json` é absoluto e correto
-- Confirma que o script tem permissões de execução: `chmod +x hooks/permission-hook.sh`
-- Verifica que `jq` e `curl` estão instalados
+**Mensagem de arranque não chega ao Telegram**
+- Confirma que o servidor arrancou sem erros no terminal
+- Verifica que o token e chat ID no `.env` estão corretos
+
+**Os botões de aprovação não aparecem**
+- Confirma que o hook está configurado no nível raiz do `~/.claude/settings.json` (não dentro de `"permissions"`)
+- Verifica que o caminho para `permission-hook.js` é absoluto e correto
+- Confirma que o servidor ClaudeRemote está a correr antes de lançar tarefas no Claude Code
+
+**O Claude pede aprovação no terminal em vez do Telegram**
+- O hook não está a ser chamado — verifica a configuração do `~/.claude/settings.json`
+- Reinicia o Claude Code após alterar o `settings.json`
 
 **Timeout em todos os pedidos**
 - Verifica que o servidor está a correr: `curl http://127.0.0.1:8765/health`
@@ -230,13 +315,15 @@ sudo systemctl start claude-remote
 - Instala globalmente: `npm install -g @anthropic-ai/claude-code`
 - Ou define o caminho completo em `CLAUDE_CMD=/caminho/para/claude`
 
+**Contexto perdido entre mensagens**
+- É comportamento esperado após `/new` ou reinício do servidor
+- O contexto é mantido automaticamente durante a sessão
+
 ---
 
 ## Requisitos
 
 - **Node.js** >= 18.0.0
-- **jq** (para o hook bash) — `apt install jq` ou `brew install jq`
-- **curl** (para o hook bash) — normalmente já instalado
 - **Claude Code CLI** — `npm install -g @anthropic-ai/claude-code`
 
 ---
