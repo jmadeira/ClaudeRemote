@@ -1,0 +1,25 @@
+{
+  "name": "claude-remote",
+  "version": "1.0.0",
+  "description": "Controlo remoto bidirecional do Claude Code via Telegram",
+  "main": "src/index.js",
+  "bin": {
+    "claude-remote": "./src/index.js"
+  },
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node --test test/*.test.js",
+    "setup": "bash scripts/setup.sh"
+  },
+  "keywords": ["claude", "claude-code", "telegram", "remote", "approval", "vscode"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.0",
+    "telegraf": "^4.16.3"
+  }
+}
