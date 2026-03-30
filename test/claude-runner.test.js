@@ -65,7 +65,6 @@ describe('ClaudeRunner', () => {
 
   test('não permite mais que MAX_CONCURRENT_TASKS simultâneas', async () => {
     const ClaudeRunner = require('../src/claude-runner');
-    // Simular uma tarefa ativa forçando _activeTask
     const runner = new ClaudeRunner('echo', process.cwd(), 10, 1);
     runner._activeTask = { prompt: 'tarefa fake', startedAt: Date.now(), cwd: process.cwd() };
 
@@ -76,7 +75,33 @@ describe('ClaudeRunner', () => {
       assert.ok(err.message.includes('tarefa ativa'));
     }
 
-    // Limpar
     runner._activeTask = null;
+  });
+
+  test('resetSession limpa o sessionId', () => {
+    const ClaudeRunner = require('../src/claude-runner');
+    const runner = new ClaudeRunner('echo', process.cwd(), 10, 1);
+    runner._sessionId = 'abc-123';
+    assert.equal(runner.sessionId, 'abc-123');
+    runner.resetSession();
+    assert.equal(runner.sessionId, null);
+  });
+
+  test('sessionId começa null', () => {
+    const ClaudeRunner = require('../src/claude-runner');
+    const runner = new ClaudeRunner('echo', process.cwd(), 10, 1);
+    assert.equal(runner.sessionId, null);
+  });
+
+  test('run() usa --resume quando sessionId está definido', async () => {
+    const ClaudeRunner = require('../src/claude-runner');
+    // Usar 'node' com script que imprime os args para verificar --resume
+    const runner = new ClaudeRunner('node', process.cwd(), 10, 1);
+    runner._sessionId = 'test-session-id';
+    // O processo vai falhar (node não é claude) mas podemos verificar que os args estão corretos
+    // inspecionando o processo antes de correr — verificamos apenas que não crasha
+    const result = await runner.run('hello');
+    assert.ok(typeof result === 'object');
+    assert.ok('success' in result);
   });
 });

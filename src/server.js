@@ -10,10 +10,12 @@ function createServer(approvalManager, onPermissionRequest) {
   // Middleware — parse JSON com limite de 1MB
   app.use(express.json({ limit: '1mb' }));
 
-  // Log de cada request
+  // Log de requests relevantes (ignorar health checks)
   app.use((req, _res, next) => {
-    const ts = new Date().toISOString();
-    console.log(`[${ts}] ${req.method} ${req.path}`);
+    if (req.path !== '/health') {
+      const ts = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+      console.log(`[${ts}] 🌐 ${req.method} ${req.path}`);
+    }
     next();
   });
 

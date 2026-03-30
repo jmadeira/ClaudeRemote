@@ -4,6 +4,11 @@ const { Telegraf, Markup } = require('telegraf');
 const { existsSync } = require('fs');
 const { formatPermissionRequest, formatTaskResult, formatStatus, formatWelcome, escapeMarkdown } = require('./formatter');
 
+function log(direction, msg) {
+  const ts = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  console.log(`[${ts}] ${direction} ${msg}`);
+}
+
 function createBot(config, approvalManager, claudeRunner) {
   const bot = new Telegraf(config.TELEGRAM_BOT_TOKEN);
 
@@ -106,6 +111,12 @@ function createBot(config, approvalManager, claudeRunner) {
     }
   });
 
+  // /new — reiniciar sessão (nova conversa)
+  bot.command('new', async (ctx) => {
+    claudeRunner.resetSession();
+    await ctx.reply('🔄 Nova sessão iniciada. O Claude não tem memória das mensagens anteriores.').catch(() => {});
+  });
+
   // /cancel
   bot.command('cancel', async (ctx) => {
     const cancelled = claudeRunner.cancel();
@@ -136,11 +147,13 @@ function createBot(config, approvalManager, claudeRunner) {
     const found = approvalManager.resolveRequest(requestId, decision);
 
     if (!found) {
+      log('⏰', `Pedido ${requestId} expirado ou já resolvido`);
       await ctx.answerCbQuery('⏰ Pedido expirado ou já resolvido.').catch(() => {});
       return;
     }
 
     const emoji = decision === 'allow' ? '✅ APROVADO' : '❌ REJEITADO';
+    log(decision === 'allow' ? '✅' : '❌', `Permissão ${decision === 'allow' ? 'aprovada' : 'rejeitada'} via botão | ID: ${requestId}`);
     try {
       await ctx.editMessageReplyMarkup({ inline_keyboard: [] });
       await ctx.editMessageText(
@@ -154,41 +167,65 @@ function createBot(config, approvalManager, claudeRunner) {
     await ctx.answerCbQuery(emoji).catch(() => {});
   });
 
-  // Mensagens de texto (execução de tarefas)
+  // Mensagens de texto (execução de tarefas + aprovação por texto)
   bot.on('text', async (ctx) => {
     const text = ctx.message && ctx.message.text;
     if (!text || text.startsWith('/')) return;
 
+    // Aprovação por texto simples quando há pedidos pendentes
+    if (approvalManager.pendingCount > 0) {
+      const normalized = text.trim().toLowerCase();
+      if (['s', 'sim', 'y', 'yes', '1'].includes(normalized)) {
+        const count = approvalManager.approveAll();
+        log('✅', `Aprovação por texto: ${count} pedido(s) aprovado(s)`);
+        await ctx.reply(`✅ ${count} pedido(s) aprovado(s).`).catch(() => {});
+        return;
+      }
+      if (['n', 'não', 'nao', 'no', '0'].includes(normalized)) {
+        const count = approvalManager.denyAll();
+        log('❌', `Rejeição por texto: ${count} pedido(s) rejeitado(s)`);
+        await ctx.reply(`❌ ${count} pedido(s) rejeitado(s).`).catch(() => {});
+        return;
+      }
+    }
+
     if (claudeRunner.isRunning) {
+      log('⚠️', 'Tarefa já ativa — mensagem ignorada');
       await ctx.reply('⚠️ Já existe uma tarefa ativa. Aguarda ou usa /cancel para cancelar.').catch(() => {});
       return;
     }
 
-    let processingMsg;
-    try {
-      processingMsg = await ctx.reply(`⏳ A processar...\n📁 ${currentProjectDir}`);
-    } catch (_) {}
+    log('📨', `Telegram → tarefa recebida: "${text.slice(0, 80)}${text.length > 80 ? '...' : ''}"`);
+    log('📁', `Projeto: ${currentProjectDir}`);
+    await ctx.reply(`⏳ A processar...\n📁 ${currentProjectDir}`).catch(() => {});
 
-    const result = await claudeRunner.run(text, currentProjectDir).catch((err) => ({
-      success: false,
-      output: err.message,
-      duration: 0,
-    }));
+    // Executar em background — não bloqueia o handler do Telegraf
+    claudeRunner.run(text, currentProjectDir)
+      .catch((err) => ({ success: false, output: err.message, duration: 0 }))
+      .then(async (result) => {
+        log(result.success ? '✅' : '⚠️', `Claude concluiu em ${result.duration}ms`);
+        if (!result.success) log('⚠️', `Erro: ${result.output.slice(0, 120)}`);
+        const msg = formatTaskResult(text, result.output, result.success, result.duration);
+        try {
+          await bot.telegram.sendMessage(config.TELEGRAM_CHAT_ID, msg, { parse_mode: 'Markdown' });
+          log('📤', 'Resultado enviado ao Telegram');
+        } catch (_) {
+          await bot.telegram.sendMessage(
+            config.TELEGRAM_CHAT_ID,
+            `${result.success ? '✅' : '⚠️'} ${result.output}`
+          ).catch(() => {});
+        }
+      });
+  });
 
-    const msg = formatTaskResult(text, result.output, result.success, result.duration);
-
-    try {
-      await ctx.reply(msg, { parse_mode: 'Markdown' });
-    } catch (_) {
-      // Fallback sem formatação
-      try {
-        await ctx.reply(`${result.success ? '✅' : '⚠️'} ${result.output}`);
-      } catch (__) {}
-    }
+  // Tratamento global de erros do Telegraf
+  bot.catch((err, ctx) => {
+    console.error('Telegraf error:', err.message);
   });
 
   // Função para enviar notificação de permissão ao utilizador
   bot.sendPermissionRequest = async (toolName, toolInput, cwd, requestId) => {
+    log('🔔', `Pedido de permissao: ${toolName} | cwd: ${cwd} | ID: ${requestId}`);
     const msg = formatPermissionRequest(toolName, toolInput, cwd, requestId);
     const keyboard = Markup.inlineKeyboard([
       Markup.button.callback('✅ Aprovar', `approve:${requestId}`),
@@ -216,7 +253,9 @@ function createBot(config, approvalManager, claudeRunner) {
   bot.sendMessage = async (text) => {
     try {
       await bot.telegram.sendMessage(config.TELEGRAM_CHAT_ID, text);
-    } catch (_) {}
+    } catch (err) {
+      console.error('⚠️ Falha ao enviar mensagem Telegram:', err.message);
+    }
   };
 
   // Getter para o projeto atual (necessário no index.js)

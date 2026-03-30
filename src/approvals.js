@@ -39,6 +39,17 @@ class ApprovalManager extends EventEmitter {
     return true;
   }
 
+  // Aprova todos os pendentes
+  approveAll() {
+    const count = this._pending.size;
+    for (const [id, entry] of this._pending.entries()) {
+      clearTimeout(entry.timer);
+      entry.resolve('allow');
+    }
+    this._pending.clear();
+    return count;
+  }
+
   // Rejeita todos os pendentes (para /denyall)
   denyAll() {
     const count = this._pending.size;

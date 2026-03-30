@@ -78,7 +78,7 @@ Adiciona ao ficheiro `~/.claude/settings.json`:
         "hooks": [
           {
             "type": "command",
-            "command": "/caminho/absoluto/claude-remote/hooks/permission-hook.sh"
+            "command": "node C:/Users/joaom/OneDrive/PROJECTS/ClaudeRemote/hooks/permission-hook.js"
           }
         ]
       }
@@ -86,6 +86,8 @@ Adiciona ao ficheiro `~/.claude/settings.json`:
   }
 }
 ```
+
+> **Windows:** usa sempre `node` + caminho absoluto para o `permission-hook.js`. O `permission-hook.sh` requer Git Bash/WSL.
 
 ### 5. Iniciar
 

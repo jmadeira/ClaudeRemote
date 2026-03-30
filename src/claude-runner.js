@@ -2,21 +2,20 @@
 
 const { spawn } = require('child_process');
 const { existsSync } = require('fs');
-const path = require('path');
 
 class ClaudeRunner {
   constructor(claudeCmd, defaultCwd, taskTimeout, maxConcurrent) {
     this._claudeCmd = claudeCmd || 'claude';
     this._defaultCwd = defaultCwd || process.cwd();
-    // timeout em milissegundos
     this._taskTimeoutMs = (taskTimeout || 600) * 1000;
     this._maxConcurrent = maxConcurrent || 1;
     this._activeTask = null;
     this._activeProcess = null;
+    this._sessionId = null;
   }
 
   // Executa um prompt no Claude Code CLI
-  // Retorna { success: boolean, output: string, duration: number }
+  // Retorna { success: boolean, output: string, duration: number, sessionId: string|null }
   run(prompt, cwd) {
     if (this._activeTask) {
       return Promise.reject(new Error('Já existe uma tarefa ativa. Usa /cancel para cancelar.'));
@@ -30,11 +29,15 @@ class ClaudeRunner {
 
     return new Promise((resolve) => {
       const startedAt = Date.now();
-      const args = ['-p', prompt, '--output-format', 'text', '--cwd', workDir];
+      const args = ['-p', prompt, '--output-format', 'json'];
+      if (this._sessionId) {
+        args.push('--resume', this._sessionId);
+      }
 
       let proc;
       try {
         proc = spawn(this._claudeCmd, args, {
+          cwd: workDir,
           env: { ...process.env },
           stdio: ['ignore', 'pipe', 'pipe'],
         });
@@ -60,7 +63,6 @@ class ClaudeRunner {
       proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
       proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
 
-      // Timeout
       const timeoutHandle = setTimeout(() => {
         if (this._activeProcess === proc) {
           try { proc.kill('SIGTERM'); } catch (_) {}
@@ -97,12 +99,32 @@ class ClaudeRunner {
         this._activeProcess = null;
         const duration = Date.now() - startedAt;
 
-        const success = code === 0 || (stdout.length > 0);
-        const output = stdout.length > 0 ? stdout : (stderr || `Processo terminou com código ${code}`);
+        // Tentar parsear JSON da resposta
+        let output = '';
+        let sessionId = null;
+        try {
+          const parsed = JSON.parse(stdout.trim());
+          output = parsed.result || parsed.message || stdout;
+          sessionId = parsed.session_id || null;
+        } catch (_) {
+          output = stdout;
+        }
 
-        resolve({ success, output, duration });
+        if (!output && stderr) output = stderr;
+        if (!output) output = `Processo terminou com código ${code}`;
+
+        // Atualizar session ID para continuar a conversa
+        if (sessionId) this._sessionId = sessionId;
+
+        const success = code === 0 || (stdout.length > 0);
+        resolve({ success, output, duration, sessionId });
       });
     });
+  }
+
+  // Reinicia a sessão (nova conversa)
+  resetSession() {
+    this._sessionId = null;
   }
 
   // Cancela a tarefa ativa (se existir)
@@ -114,14 +136,16 @@ class ClaudeRunner {
     return true;
   }
 
-  // Verifica se há tarefa ativa
   get isRunning() {
     return this._activeTask !== null;
   }
 
-  // Info da tarefa ativa
   get activeTask() {
     return this._activeTask ? { ...this._activeTask } : null;
+  }
+
+  get sessionId() {
+    return this._sessionId;
   }
 }
 

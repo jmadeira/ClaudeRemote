@@ -36,20 +36,39 @@ async function main() {
 
   const app = createServer(approvalManager, onPermissionRequest);
 
-  // Lançar bot Telegram
-  await bot.launch();
+  // Lançar bot Telegram (não fazer await — em long-polling nunca resolve)
+  bot.launch().catch((err) => {
+    console.error('❌ Erro no bot Telegram:', err.message);
+    process.exit(1);
+  });
+  // Aguardar um momento para o bot estabelecer ligação
+  await new Promise((r) => setTimeout(r, 2000));
   console.log('🤖 Bot Telegram conectado');
 
   // Lançar servidor HTTP (bind apenas a localhost)
-  const server = app.listen(config.PORT, '127.0.0.1', () => {
-    console.log(`🌐 Servidor a escutar em http://127.0.0.1:${config.PORT}`);
-    console.log(`📁 Projeto: ${config.PROJECT_DIR}`);
-    console.log(`⏱  Timeout aprovações: ${config.APPROVAL_TIMEOUT}s | Timeout tarefas: ${config.TASK_TIMEOUT}s`);
-    console.log('✅ Pronto!');
+  let server;
+  await new Promise((resolve) => {
+    server = app.listen(config.PORT, '127.0.0.1', () => {
+      console.log(`🌐 Servidor a escutar em http://127.0.0.1:${config.PORT}`);
+      console.log(`📁 Projeto: ${config.PROJECT_DIR}`);
+      console.log(`⏱  Timeout aprovações: ${config.APPROVAL_TIMEOUT}s | Timeout tarefas: ${config.TASK_TIMEOUT}s`);
+      console.log('✅ Pronto!');
+      resolve();
+    });
   });
 
   // Notificar que está online
-  await bot.sendMessage(`🟢 ClaudeRemote v${VERSION} online\n📁 Projeto: ${config.PROJECT_DIR}\n🌐 Servidor: http://127.0.0.1:${config.PORT}`);
+  console.log('📨 A enviar notificação de arranque ao Telegram...');
+  const startTime = new Date().toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const startMsg =
+    `🟢 ClaudeRemote v${VERSION} iniciado às ${startTime}\n` +
+    `📁 Projeto: ${config.PROJECT_DIR}\n` +
+    `⏱ Aprovações: ${config.APPROVAL_TIMEOUT}s | Tarefas: ${config.TASK_TIMEOUT}s\n` +
+    `🔔 Hook de permissoes ativo`;
+  await bot.telegram.sendMessage(config.TELEGRAM_CHAT_ID, startMsg).catch((err) => {
+    console.error('⚠️ Falha ao notificar Telegram no arranque:', err.message);
+  });
+  console.log('📨 Notificação enviada.');
 
   // Graceful shutdown
   let isShuttingDown = false;

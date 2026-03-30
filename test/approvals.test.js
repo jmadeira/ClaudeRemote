@@ -86,4 +86,35 @@ describe('ApprovalManager', () => {
     await fastManager.createRequest(id, {});
     assert.equal(fastManager.pendingCount, 0);
   });
+
+  test('approveAll aprova todos os pendentes e retorna contagem', async () => {
+    const p1 = manager.createRequest('a1', {});
+    const p2 = manager.createRequest('a2', {});
+    assert.equal(manager.pendingCount, 2);
+    const count = manager.approveAll();
+    assert.equal(count, 2);
+    assert.equal(manager.pendingCount, 0);
+    const [v1, v2] = await Promise.all([p1, p2]);
+    assert.equal(v1, 'allow');
+    assert.equal(v2, 'allow');
+  });
+
+  test('approveAll em lista vazia retorna 0', () => {
+    const count = manager.approveAll();
+    assert.equal(count, 0);
+  });
+
+  test('denyAll em lista vazia retorna 0', () => {
+    const count = manager.denyAll();
+    assert.equal(count, 0);
+  });
+
+  test('resolver o mesmo pedido duas vezes retorna false na segunda', async () => {
+    const id = 'double-resolve';
+    const promise = manager.createRequest(id, {});
+    manager.resolveRequest(id, 'allow');
+    await promise;
+    const second = manager.resolveRequest(id, 'deny');
+    assert.equal(second, false);
+  });
 });
