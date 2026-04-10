@@ -11,6 +11,11 @@
 //     }]
 //   }
 // }
+//
+// Comportamento quando o servidor ClaudeRemote não está disponível:
+//   O hook não devolve nenhuma decisão — o Claude Code cai para o seu mecanismo
+//   nativo de aprovação (interface do utilizador). Nenhuma ação é bloqueada
+//   nem aprovada automaticamente.
 
 const https = require('https');
 const http = require('http');
@@ -22,21 +27,43 @@ function post(url, body) {
     const parsed = new URL(url);
     const lib = parsed.protocol === 'https:' ? https : http;
     const data = JSON.stringify(body);
-    const req = lib.request({
+
+    // Verificar primeiro se o servidor está disponível (conexão rápida)
+    const probe = lib.request({
       hostname: parsed.hostname,
       port: parsed.port,
-      path: parsed.pathname,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
-      // Sem timeout: aguarda indefinidamente até o utilizador aprovar/rejeitar no Telegram
-    }, (res) => {
-      let raw = '';
-      res.on('data', (c) => { raw += c; });
-      res.on('end', () => resolve(raw));
+      path: '/health',
+      method: 'GET',
+      timeout: 2000,
+    }, () => {
+      probe.destroy();
+      // Servidor está disponível — fazer o pedido real sem timeout
+      const req = lib.request({
+        hostname: parsed.hostname,
+        port: parsed.port,
+        path: parsed.pathname,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+        // Sem timeout: aguarda indefinidamente até o utilizador aprovar/rejeitar
+      }, (res2) => {
+        let raw = '';
+        res2.on('data', (c) => { raw += c; });
+        res2.on('end', () => resolve({ available: true, body: raw }));
+      });
+      req.on('error', reject);
+      req.write(data);
+      req.end();
     });
-    req.on('error', reject);
-    req.write(data);
-    req.end();
+
+    probe.on('error', () => {
+      probe.destroy();
+      resolve({ available: false });
+    });
+    probe.on('timeout', () => {
+      probe.destroy();
+      resolve({ available: false });
+    });
+    probe.end();
   });
 }
 
@@ -52,26 +79,31 @@ async function main() {
   const toolInput = event.tool_input || event.toolInput || {};
   const cwd = event.cwd || '';
 
-  let decision = 'deny';
+  let result;
   try {
-    const raw = await post(`${SERVER_URL}/request-approval`, { tool_name: toolName, tool_input: toolInput, cwd });
-    const res = JSON.parse(raw);
-    if (res.decision === 'allow') decision = 'allow';
+    result = await post(`${SERVER_URL}/request-approval`, { tool_name: toolName, tool_input: toolInput, cwd });
   } catch (_) {
-    // Servidor não disponível — negar por segurança
+    result = { available: false };
   }
 
-  const output = {
+  if (!result.available) {
+    // Servidor não está a correr — não tomar nenhuma decisão.
+    // O Claude Code cai para o mecanismo nativo de aprovação na interface do utilizador.
+    process.exit(0);
+  }
+
+  const res = JSON.parse(result.body);
+  const decision = res.decision === 'allow' ? 'allow' : 'deny';
+
+  process.stdout.write(JSON.stringify({
     hookSpecificOutput: {
       hookEventName: 'PermissionRequest',
       decision: { behavior: decision },
     },
-  };
-  process.stdout.write(JSON.stringify(output) + '\n');
+  }) + '\n');
 }
 
 main().catch(() => {
-  process.stdout.write(JSON.stringify({
-    hookSpecificOutput: { hookEventName: 'PermissionRequest', decision: { behavior: 'deny' } },
-  }) + '\n');
+  // Erro inesperado — não tomar decisão, deixar o Claude Code tratar
+  process.exit(0);
 });

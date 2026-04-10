@@ -261,4 +261,14 @@ describe('Integração: hook de permissão', () => {
     const source = fs.readFileSync(hookPath, 'utf8');
     assert.ok(source.includes('CLAUDE_REMOTE_URL'), 'Deve suportar CLAUDE_REMOTE_URL');
   });
+
+  test('permission-hook.js não toma decisão quando servidor está indisponível', () => {
+    const path = require('path');
+    const fs = require('fs');
+    const hookPath = path.join(__dirname, '../hooks/permission-hook.js');
+    const source = fs.readFileSync(hookPath, 'utf8');
+    // Quando o servidor não está disponível, o hook deve sair sem devolver decisão
+    assert.ok(source.includes('available: false'), 'Deve detetar servidor indisponível');
+    assert.ok(source.includes('process.exit(0)'), 'Deve sair sem decisão quando servidor está em baixo');
+  });
 });
