@@ -170,11 +170,11 @@ Para começar uma conversa nova (sem memória das anteriores), usa `/new`.
 | `TELEGRAM_BOT_TOKEN` | Sim | — | Token do BotFather |
 | `TELEGRAM_CHAT_ID` | Sim | — | Chat ID do utilizador |
 | `PORT` | Não | 8765 | Porta do servidor HTTP local |
-| `APPROVAL_TIMEOUT` | Não | 300 | Timeout em segundos para aprovação |
+| `APPROVAL_TIMEOUT` | Não | 0 | Timeout em segundos para aprovação. `0` = sem timeout (aguarda indefinidamente) |
 | `PROJECT_DIR` | Não | `process.cwd()` | Diretório do projeto |
 | `CLAUDE_CMD` | Não | `claude` | Comando do Claude Code CLI |
 | `MAX_CONCURRENT_TASKS` | Não | 1 | Máximo de tarefas simultâneas |
-| `TASK_TIMEOUT` | Não | 600 | Timeout em segundos para tarefas CLI |
+| `TASK_TIMEOUT` | Não | 0 | Timeout em segundos para tarefas CLI. `0` = sem timeout. Se ambos > 0, `TASK_TIMEOUT` deve ser superior a `APPROVAL_TIMEOUT` |
 
 ---
 

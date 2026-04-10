@@ -4,25 +4,29 @@ const { EventEmitter } = require('events');
 const { randomUUID } = require('crypto');
 
 class ApprovalManager extends EventEmitter {
-  constructor(timeoutMs) {
+  constructor(timeoutSeconds) {
     super();
-    // timeout em milissegundos
-    this._timeoutMs = (timeoutMs != null ? timeoutMs : 300) * 1000;
-    // Mapa de id → { resolve, reject, timer, metadata }
+    // 0 ou omitido = sem timeout (espera indefinida). Qualquer valor > 0 = timeout em segundos.
+    this._timeoutMs = timeoutSeconds > 0 ? timeoutSeconds * 1000 : 0;
+    // Mapa de id → { resolve, timer, metadata }
     this._pending = new Map();
   }
 
-  // Cria um novo pedido pendente. Retorna Promise que resolve com "allow" ou "deny"
+  // Cria um novo pedido pendente. Retorna Promise que resolve com "allow" ou "deny".
+  // Se _timeoutMs === 0, a promise fica pendente até ser resolvida manualmente.
   createRequest(id, metadata) {
     const requestId = id || randomUUID();
     return new Promise((resolve) => {
-      const timer = setTimeout(() => {
-        if (this._pending.has(requestId)) {
-          this._cleanup(requestId);
-          this.emit('timeout', requestId, metadata);
-          resolve('deny');
-        }
-      }, this._timeoutMs);
+      let timer = null;
+      if (this._timeoutMs > 0) {
+        timer = setTimeout(() => {
+          if (this._pending.has(requestId)) {
+            this._cleanup(requestId);
+            this.emit('timeout', requestId, metadata);
+            resolve('deny');
+          }
+        }, this._timeoutMs);
+      }
 
       this._pending.set(requestId, { resolve, timer, metadata });
     });

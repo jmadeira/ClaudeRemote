@@ -7,7 +7,8 @@ class ClaudeRunner {
   constructor(claudeCmd, defaultCwd, taskTimeout, maxConcurrent) {
     this._claudeCmd = claudeCmd || 'claude';
     this._defaultCwd = defaultCwd || process.cwd();
-    this._taskTimeoutMs = (taskTimeout || 600) * 1000;
+    // 0 = sem timeout (processo corre até terminar). Qualquer valor > 0 = limite em segundos.
+    this._taskTimeoutMs = taskTimeout > 0 ? taskTimeout * 1000 : 0;
     this._maxConcurrent = maxConcurrent || 1;
     this._activeTask = null;
     this._activeProcess = null;
@@ -63,7 +64,7 @@ class ClaudeRunner {
       proc.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
       proc.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
 
-      const timeoutHandle = setTimeout(() => {
+      const timeoutHandle = this._taskTimeoutMs > 0 ? setTimeout(() => {
         if (this._activeProcess === proc) {
           try { proc.kill('SIGTERM'); } catch (_) {}
           this._activeTask = null;
@@ -75,10 +76,10 @@ class ClaudeRunner {
             duration,
           });
         }
-      }, this._taskTimeoutMs);
+      }, this._taskTimeoutMs) : null;
 
       proc.on('error', (err) => {
-        clearTimeout(timeoutHandle);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         this._activeTask = null;
         this._activeProcess = null;
         const duration = Date.now() - startedAt;
@@ -94,7 +95,7 @@ class ClaudeRunner {
       });
 
       proc.on('close', (code) => {
-        clearTimeout(timeoutHandle);
+        if (timeoutHandle) clearTimeout(timeoutHandle);
         this._activeTask = null;
         this._activeProcess = null;
         const duration = Date.now() - startedAt;

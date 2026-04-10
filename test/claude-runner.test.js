@@ -93,6 +93,16 @@ describe('ClaudeRunner', () => {
     assert.equal(runner.sessionId, null);
   });
 
+  test('taskTimeout=0 desativa o limite de tempo da tarefa', async () => {
+    const ClaudeRunner = require('../src/claude-runner');
+    const runner = new ClaudeRunner('echo', process.cwd(), 0, 1);
+    assert.equal(runner._taskTimeoutMs, 0, 'taskTimeoutMs deve ser 0');
+    // Verificar que o runner funciona normalmente sem timeout
+    const result = await runner.run('hello');
+    assert.ok(typeof result === 'object');
+    assert.ok('success' in result);
+  });
+
   test('run() usa --resume quando sessionId está definido', async () => {
     const ClaudeRunner = require('../src/claude-runner');
     // Usar 'node' com script que imprime os args para verificar --resume

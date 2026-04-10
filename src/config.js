@@ -17,11 +17,13 @@ const config = {
   TELEGRAM_BOT_TOKEN: process.env.TELEGRAM_BOT_TOKEN,
   TELEGRAM_CHAT_ID: process.env.TELEGRAM_CHAT_ID,
   PORT: parseInt(process.env.PORT, 10) || 8765,
-  APPROVAL_TIMEOUT: parseInt(process.env.APPROVAL_TIMEOUT, 10) || 300,
+  // 0 = sem timeout (espera indefinida). Qualquer valor > 0 = timeout em segundos.
+  // TASK_TIMEOUT deve ser superior a APPROVAL_TIMEOUT quando ambos são > 0.
+  APPROVAL_TIMEOUT: process.env.APPROVAL_TIMEOUT !== undefined ? parseInt(process.env.APPROVAL_TIMEOUT, 10) : 0,
   PROJECT_DIR: process.env.PROJECT_DIR || process.cwd(),
   CLAUDE_CMD: process.env.CLAUDE_CMD || 'claude',
   MAX_CONCURRENT_TASKS: parseInt(process.env.MAX_CONCURRENT_TASKS, 10) || 1,
-  TASK_TIMEOUT: parseInt(process.env.TASK_TIMEOUT, 10) || 600,
+  TASK_TIMEOUT: process.env.TASK_TIMEOUT !== undefined ? parseInt(process.env.TASK_TIMEOUT, 10) : 0,
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 };
 

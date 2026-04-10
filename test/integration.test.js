@@ -165,6 +165,36 @@ describe('Integração: ApprovalManager + Servidor HTTP', () => {
     assert.equal(after.body.pending, 0);
   });
 
+  test('timeout=0 mantém pedido pendente até resolução manual', async () => {
+    const infiniteManager = new ApprovalManager(0);
+    const timeouts = [];
+    infiniteManager.on('timeout', (id) => timeouts.push(id));
+
+    const app3 = createServer(infiniteManager, null);
+    const server3 = await new Promise((resolve) => {
+      const s = app3.listen(0, '127.0.0.1', () => resolve(s));
+    });
+    const port3 = server3.address().port;
+
+    const requestPromise = post(port3, '/request-approval', {
+      tool_name: 'Edit',
+      tool_input: { path: '/z.js' },
+      cwd: '/',
+    });
+
+    // Aguardar para confirmar que não expirou sozinho
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(infiniteManager.pendingCount, 1, 'Deve manter pedido pendente');
+    assert.equal(timeouts.length, 0, 'Não deve emitir timeout');
+
+    // Resolver manualmente
+    infiniteManager.approveAll();
+    const result = await requestPromise;
+    assert.equal(result.body.decision, 'allow');
+
+    await new Promise((resolve) => server3.close(resolve));
+  });
+
   test('timeout do pedido resolve com deny e emite evento', async () => {
     const fastManager = new ApprovalManager(0.1); // 100ms
     const timeouts = [];

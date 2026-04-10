@@ -28,14 +28,13 @@ function post(url, body) {
       path: parsed.pathname,
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
-      timeout: 310000,
+      // Sem timeout: aguarda indefinidamente até o utilizador aprovar/rejeitar no Telegram
     }, (res) => {
       let raw = '';
       res.on('data', (c) => { raw += c; });
       res.on('end', () => resolve(raw));
     });
     req.on('error', reject);
-    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
     req.write(data);
     req.end();
   });

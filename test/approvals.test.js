@@ -117,4 +117,38 @@ describe('ApprovalManager', () => {
     const second = manager.resolveRequest(id, 'deny');
     assert.equal(second, false);
   });
+
+  test('timeout=0 cria pedido sem expiração automática', async () => {
+    const infiniteManager = new ApprovalManager(0);
+    const id = 'infinite-req';
+    let resolved = false;
+    const promise = infiniteManager.createRequest(id, { tool_name: 'Bash' });
+    promise.then(() => { resolved = true; });
+
+    // Aguardar para confirmar que não expirou sozinho
+    await new Promise((r) => setTimeout(r, 200));
+    assert.equal(resolved, false, 'Pedido não deve expirar com timeout=0');
+    assert.equal(infiniteManager.pendingCount, 1);
+
+    // Resolver manualmente
+    infiniteManager.resolveRequest(id, 'allow');
+    const result = await promise;
+    assert.equal(result, 'allow');
+    assert.equal(infiniteManager.pendingCount, 0);
+  });
+
+  test('timeout=0 não emite evento "timeout"', async () => {
+    const infiniteManager = new ApprovalManager(0);
+    let timedOut = false;
+    infiniteManager.on('timeout', () => { timedOut = true; });
+
+    const id = 'no-timeout-evt';
+    const promise = infiniteManager.createRequest(id, {});
+
+    await new Promise((r) => setTimeout(r, 150));
+    assert.equal(timedOut, false, 'Não deve emitir timeout com timeout=0');
+
+    infiniteManager.resolveRequest(id, 'deny');
+    await promise;
+  });
 });

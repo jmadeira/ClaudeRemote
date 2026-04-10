@@ -12,8 +12,8 @@ TOOL_NAME=$(echo "$INPUT" | jq -r '.tool_name // .toolName // "unknown"' 2>/dev/
 TOOL_INPUT=$(echo "$INPUT" | jq -c '.tool_input // .toolInput // {}' 2>/dev/null)
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""' 2>/dev/null)
 
-# POST ao servidor local (timeout = APPROVAL_TIMEOUT + 10s de margem)
-RESPONSE=$(curl -s -m 310 \
+# POST ao servidor local (sem timeout: aguarda indefinidamente até aprovação/rejeição)
+RESPONSE=$(curl -s \
   -X POST \
   -H "Content-Type: application/json" \
   -d "{\"tool_name\": \"$TOOL_NAME\", \"tool_input\": $TOOL_INPUT, \"cwd\": \"$CWD\"}" \
