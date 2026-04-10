@@ -30,7 +30,7 @@ Controlo remoto bidirecional do Claude Code via Telegram — aprova permissões 
 
 **Duas funções principais:**
 
-1. **Aprovação remota de permissões** — Quando o Claude Code pede permissão para executar uma ferramenta (Bash, Edit, Write, etc.), recebes uma notificação no Telegram com botões [✅ Aprovar] e [❌ Rejeitar]. Podes também aprovar/rejeitar respondendo com texto simples (`s`/`n`).
+1. **Aprovação remota de permissões** — Quando o Claude Code pede permissão para executar uma ferramenta (Bash, Edit, Write, etc.), recebes uma notificação no Telegram com botões [✅ Aprovar] e [❌ Rejeitar]. Podes também aprovar/rejeitar respondendo com texto simples (`s`/`n`). Se o servidor não estiver a correr, o Claude Code usa a sua interface nativa — nunca bloqueia nem aprova automaticamente.
 
 2. **Envio remoto de tarefas** — Envia mensagens de texto no Telegram que são executadas como prompts no Claude Code CLI, mantendo contexto de conversação entre mensagens.
 
@@ -153,6 +153,8 @@ Podes responder de três formas:
 - **Texto `s`** (ou `sim`, `y`, `yes`, `1`) — aprova todos os pedidos pendentes
 - **Texto `n`** (ou `não`, `nao`, `no`, `0`) — rejeita todos os pedidos pendentes
 
+**Quando o servidor não está a correr:** o hook não toma nenhuma decisão e o Claude Code usa a sua interface nativa de aprovação (terminal ou IDE). O Claude Code nunca fica bloqueado por o ClaudeRemote estar em baixo.
+
 ---
 
 ## Contexto de Conversação
@@ -243,7 +245,7 @@ O servidor mostra em tempo real o que está a acontecer:
 npm test
 ```
 
-64 testes (unit + integração) usando o runner nativo do Node.js (`node:test`), sem dependências externas.
+69 testes (unit + integração) usando o runner nativo do Node.js (`node:test`), sem dependências externas.
 
 ---
 
@@ -304,10 +306,11 @@ sudo systemctl start claude-remote
 - Confirma que o servidor ClaudeRemote está a correr antes de lançar tarefas no Claude Code
 
 **O Claude pede aprovação no terminal em vez do Telegram**
-- O hook não está a ser chamado — verifica a configuração do `~/.claude/settings.json`
+- Se o servidor ClaudeRemote não estiver a correr, é o comportamento esperado — o Claude Code usa a sua interface nativa
+- Se o servidor estiver a correr e ainda assim aparecer no terminal, verifica a configuração do `~/.claude/settings.json`
 - Reinicia o Claude Code após alterar o `settings.json`
 
-**Timeout em todos os pedidos**
+**Pedidos de aprovação aparecem no terminal em vez do Telegram**
 - Verifica que o servidor está a correr: `curl http://127.0.0.1:8765/health`
 - Confirma que a porta 8765 não está em uso por outro processo
 
